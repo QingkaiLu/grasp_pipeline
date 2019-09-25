@@ -1,0 +1,5 @@
+#The list of experiment preshape palm poses, including inference and baseline.
+geometry_msgs/PoseStamped[] exp_palm_poses
+---
+bool success
+

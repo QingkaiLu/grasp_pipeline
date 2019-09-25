@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<launch>
+    <arg name="simulation" value="true"/>
+    <arg name="save_visual_data_path" value="/mnt/tars_data/multi_finger_sim_data/"/>
+    <arg name="record_data_path" value="/mnt/tars_data/multi_finger_sim_data/"/>
+    <!-- <arg name="save_visual_data_path" value="/mnt/tars_data/multi_finger_grasp_data/"/> -->
+    <!-- <arg name="save_visual_data_path" value="/mnt/data_sal/data_kai/multi_finger_grasp_data/"/> -->
+    <arg name="use_hd_arg" value="true"/>
+    <arg name="planning" value="true"/>
+
+    <!-- <include file="$(find urlg_robots_gazebo)/launch/lbr4_allegro_control_position.launch" /> -->
+
+    <!--node name="grasp_client_node" pkg="grasp_pipeline" type="grasp_client.py" output="screen"-->
+    <node name="grasp_client_node" pkg="grasp_pipeline" type="active_learning_client.py" 
+        output="screen" unless="$(arg planning)">
+      <param name="use_sim" value="true" type="bool" if="$(arg simulation)"/>
+      <param name="use_sim" value="false" type="bool" unless="$(arg simulation)"/>
+      <param name="num_grasps_per_object" value="20" type="int"/>
+      <param name="save_visual_data_pre_path" value="$(arg save_visual_data_path)" type="string"/>
+      <param name="use_hd" value="$(arg use_hd_arg)" type="bool"/>
+      <param name="min_palm_dist_to_table" value="0.02" type="double"/>
+      <param name="max_palm_dist_to_table" value="0.05" type="double"/>
+      <param name="data_recording_path" value="$(arg record_data_path)" type="string"/>
+      <param name="save_grasp_snap" value="True" type="bool"/>
+      <param name="smooth_plan_traj" value="True" type="bool"/>
+    </node>
+
+    <!--node name="grasp_client_node" pkg="grasp_pipeline" type="active_planning_client.py" 
+        output="screen" if="$(arg planning)"-->
+    <node name="grasp_client_node" pkg="grasp_pipeline" type="voxel_planning_client.py" 
+        output="screen" if="$(arg planning)">
+      <param name="use_sim" value="true" type="bool" if="$(arg simulation)"/>
+      <param name="use_sim" value="false" type="bool" unless="$(arg simulation)"/>
+      <param name="num_grasps_per_object" value="20" type="int"/>
+      <param name="save_visual_data_pre_path" value="$(arg save_visual_data_path)" type="string"/>
+      <param name="use_hd" value="$(arg use_hd_arg)" type="bool"/>
+      <param name="min_palm_dist_to_table" value="0.02" type="double"/>
+      <param name="max_palm_dist_to_table" value="0.05" type="double"/>
+      <param name="data_recording_path" value="$(arg record_data_path)" type="string"/>
+      <param name="save_grasp_snap" value="True" type="bool"/>
+      <param name="smooth_plan_traj" value="True" type="bool"/>
+    </node>
+
+</launch>

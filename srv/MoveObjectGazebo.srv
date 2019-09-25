@@ -1,0 +1,4 @@
+string object_model_name
+geometry_msgs/PoseStamped object_pose_stamped
+---
+bool success

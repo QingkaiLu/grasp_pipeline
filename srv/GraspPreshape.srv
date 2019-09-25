@@ -1,0 +1,8 @@
+point_cloud_segmentation/GraspObject obj
+#sampling method for experiments
+bool sample
+---
+geometry_msgs/PoseStamped object_pose
+geometry_msgs/PoseStamped[] palm_goal_pose_world
+sensor_msgs/JointState[] allegro_joint_state
+bool[] is_top_grasp

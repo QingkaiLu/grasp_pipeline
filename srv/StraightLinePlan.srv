@@ -1,0 +1,4 @@
+float64 lift_height 
+---
+trajectory_msgs/JointTrajectory plan_traj
+bool success

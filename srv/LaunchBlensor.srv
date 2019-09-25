@@ -1,0 +1,4 @@
+bool launch_blensor
+bool kill_blensor
+---
+bool success

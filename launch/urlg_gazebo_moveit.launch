@@ -1,0 +1,4 @@
+<launch>
+    <include file="$(find urlg_robots_gazebo)/launch/lbr4_allegro_control_position.launch" />
+    <include file="$(find lbr4_moveit)/launch/moveit_lbr4_allegro.launch" />
+</launch>

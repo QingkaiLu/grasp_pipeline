@@ -1,0 +1,3 @@
+bool launch_urlg_gazebo
+bool launch_moveit
+---
