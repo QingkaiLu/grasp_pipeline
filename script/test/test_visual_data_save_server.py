@@ -25,7 +25,7 @@ if __name__ == '__main__':
     # cv2.imshow('depth_img',depth_img)
     # cv2.waitKey()
 
-    base_path = '/home/qingkai'
+    base_path = '/home/kai'
 
     data_recording_req = GraspDataRecordingRequest()
     data_recording_req.scene_cloud = seg_result.scene_cloud

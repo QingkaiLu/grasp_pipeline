@@ -3,7 +3,7 @@
 import os
 import rospy
 import time
-from grasp_client import GraspClient 
+from grasp_sim_client import GraspClient 
 
 
 if __name__ == '__main__':
@@ -107,7 +107,7 @@ if __name__ == '__main__':
                 # raw_input('Object not found!')
                 continue
 
-            # for pid, prior_name in enumerate(prioro_names):
+            # for pid, prior_name in enumerate(prior_names):
             for pid in xrange(prior_num):
                 dc_client.set_up_grasp_id(grasp_id)
                 prior_name = prior_names[grasp_id % prior_num] 
@@ -121,13 +121,11 @@ if __name__ == '__main__':
                 if not grasp_arm_plan:
                     rospy.logerr('Can not find moveit plan to grasp.\n')
                     grasp_plan_failures_num += 1
-                    dc_client.record_data_client_no_plan(prior_name)
-                    # dc_client.place_object_steps(move_arm=grasp_arm_plan)
-                    # continue
+                    dc_client.record_voxel_np_data_client(prior_name)
                 else:
-                    dc_client.record_grasp_data_client(prior_name)
+                    dc_client.record_voxel_data_client(prior_name)
 
-                dc_client.place_object_steps(move_arm=grasp_arm_plan)
+                dc_client.move_robot_home(move_arm=grasp_arm_plan)
 
                 #TODO: Check batch id and update the active learning model 
                 # if a whole new batch is generated

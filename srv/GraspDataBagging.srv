@@ -1,0 +1,9 @@
+int64 object_id
+int64 grasp_id
+string object_name
+string grasp_type
+string grasp_control_type
+string grasp_phase
+string operation
+---
+bool bag_data_success

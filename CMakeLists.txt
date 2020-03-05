@@ -5,13 +5,13 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   std_msgs
-  trajectory_msgs
   message_generation
   pcl_conversions
   pcl_ros
   point_cloud_segmentation
   cv_bridge
   image_transport
+  trajectory_msgs
 )
 
 find_package(PCL REQUIRED)
@@ -28,20 +28,19 @@ catkin_python_setup()
 ## Generate services in the 'srv' folder
  add_service_files(
    FILES
-   LaunchUrlgGazeboMoveit.srv
-   LaunchUrlgGazebo.srv
-   LaunchMoveit.srv
    GraspPreshape.srv
    AllegroConfig.srv
    PalmGoalPoseWorld.srv
-   MoveArm.srv
+   # MoveArm.srv
    ManageMoveitScene.srv
-   GraspDataRecording.srv
+   SimGraspData.srv
+   RealGraspData.srv
+   UpdateInfPreshape.srv
+   StraightLinePlan.srv
+   SaveVisualData.srv
+   GraspDataBagging.srv
    UpdateObjectGazebo.srv
    MoveObjectGazebo.srv
-   StraightLinePlan.srv
-   UpdateInfPreshape.srv
-   SaveVisualData.srv
  )
 
 
@@ -51,8 +50,8 @@ catkin_python_setup()
    std_msgs
    sensor_msgs
    geometry_msgs
-   trajectory_msgs
    point_cloud_segmentation
+   trajectory_msgs
  )
 
 include_directories(

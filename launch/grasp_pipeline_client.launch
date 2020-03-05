@@ -1,44 +1,93 @@
 <?xml version="1.0"?>
+
 <launch>
     <arg name="simulation" value="true"/>
-    <arg name="save_visual_data_path" value="/mnt/tars_data/multi_finger_sim_data/"/>
-    <arg name="record_data_path" value="/mnt/tars_data/multi_finger_sim_data/"/>
-    <!-- <arg name="save_visual_data_path" value="/mnt/tars_data/multi_finger_grasp_data/"/> -->
-    <!-- <arg name="save_visual_data_path" value="/mnt/data_sal/data_kai/multi_finger_grasp_data/"/> -->
     <arg name="use_hd_arg" value="true"/>
-    <arg name="planning" value="true"/>
+    <arg name="smooth_plan_traj_arg" value="true"/>
+    <!--arg name="record_data_path" value="/dataspace/data_kai/al_grasp_queries/"/-->
+    <arg name="real_data_path" value="/mnt/data_qingkai/multi_finger_exp_data/"/>
+    <!--arg name="real_data_path" value="/mnt/tars_data/multi_finger_exp_data/"/-->
+    <arg name="sim_data_path" value="/mnt/tars_data/multi_finger_sim_data/"/>
+    <arg name="go_home" value="false"/>
+    <arg name="voxel_planner" value="false"/>
+    <arg name="active_learning" value="true"/>
+    <arg name="active_planner" value="false"/>
 
-    <!-- <include file="$(find urlg_robots_gazebo)/launch/lbr4_allegro_control_position.launch" /> -->
+    <group if="$(arg voxel_planner)">
+        <node name="grasp_client_node" pkg="grasp_pipeline" 
+            type="voxel_plan_real_client.py" output="screen" unless="$(arg simulation)">
+          <param name="use_sim" value="true" type="bool" if="$(arg simulation)"/>
+          <param name="use_sim" value="false" type="bool" unless="$(arg simulation)"/>
+          <param name="num_grasps_per_object" value="10" type="int"/>
+          <param name="data_recording_path" value="$(arg real_data_path)" type="string"/>
+          <param name="save_visual_data_pre_path" value="$(arg real_data_path)" type="string"/>
+          <param name="use_hd" value="$(arg use_hd_arg)" type="bool"/>
+          <param name="smooth_plan_traj" value="$(arg smooth_plan_traj_arg)" type="bool"/>
+        </node>
 
-    <!--node name="grasp_client_node" pkg="grasp_pipeline" type="grasp_client.py" output="screen"-->
-    <node name="grasp_client_node" pkg="grasp_pipeline" type="active_learning_client.py" 
-        output="screen" unless="$(arg planning)">
-      <param name="use_sim" value="true" type="bool" if="$(arg simulation)"/>
-      <param name="use_sim" value="false" type="bool" unless="$(arg simulation)"/>
-      <param name="num_grasps_per_object" value="20" type="int"/>
-      <param name="save_visual_data_pre_path" value="$(arg save_visual_data_path)" type="string"/>
-      <param name="use_hd" value="$(arg use_hd_arg)" type="bool"/>
-      <param name="min_palm_dist_to_table" value="0.02" type="double"/>
-      <param name="max_palm_dist_to_table" value="0.05" type="double"/>
-      <param name="data_recording_path" value="$(arg record_data_path)" type="string"/>
-      <param name="save_grasp_snap" value="True" type="bool"/>
-      <param name="smooth_plan_traj" value="True" type="bool"/>
-    </node>
+        <node name="grasp_client_node" pkg="grasp_pipeline" type="voxel_plan_sim_client.py" 
+            output="screen" if="$(arg simulation)">
+          <param name="use_sim" value="true" type="bool" if="$(arg simulation)"/>
+          <param name="use_sim" value="false" type="bool" unless="$(arg simulation)"/>
+          <param name="num_grasps_per_object" value="20" type="int"/>
+          <param name="save_visual_data_pre_path" value="$(arg sim_data_path)" type="string"/>
+          <param name="use_hd" value="$(arg use_hd_arg)" type="bool"/>
+          <param name="min_palm_dist_to_table" value="0.02" type="double"/>
+          <param name="max_palm_dist_to_table" value="0.05" type="double"/>
+          <param name="data_recording_path" value="$(arg sim_data_path)" type="string"/>
+          <param name="save_grasp_snap" value="True" type="bool"/>
+          <param name="smooth_plan_traj" value="True" type="bool"/>
+        </node>
+    </group>
 
-    <!--node name="grasp_client_node" pkg="grasp_pipeline" type="active_planning_client.py" 
-        output="screen" if="$(arg planning)"-->
-    <node name="grasp_client_node" pkg="grasp_pipeline" type="voxel_planning_client.py" 
-        output="screen" if="$(arg planning)">
-      <param name="use_sim" value="true" type="bool" if="$(arg simulation)"/>
-      <param name="use_sim" value="false" type="bool" unless="$(arg simulation)"/>
-      <param name="num_grasps_per_object" value="20" type="int"/>
-      <param name="save_visual_data_pre_path" value="$(arg save_visual_data_path)" type="string"/>
-      <param name="use_hd" value="$(arg use_hd_arg)" type="bool"/>
-      <param name="min_palm_dist_to_table" value="0.02" type="double"/>
-      <param name="max_palm_dist_to_table" value="0.05" type="double"/>
-      <param name="data_recording_path" value="$(arg record_data_path)" type="string"/>
-      <param name="save_grasp_snap" value="True" type="bool"/>
-      <param name="smooth_plan_traj" value="True" type="bool"/>
-    </node>
+    <group if="$(arg active_learning)">
+        <group if="$(arg simulation)">
+            <node name="grasp_client_node" pkg="grasp_pipeline" type="active_learning_client.py" 
+                output="screen" unless="$(arg active_planner)">
+              <param name="use_sim" value="true" type="bool" if="$(arg simulation)"/>
+              <param name="use_sim" value="false" type="bool" unless="$(arg simulation)"/>
+              <param name="num_grasps_per_object" value="5" type="int"/>
+              <param name="save_visual_data_pre_path" value="$(arg sim_data_path)" type="string"/>
+              <param name="use_hd" value="$(arg use_hd_arg)" type="bool"/>
+              <param name="min_palm_dist_to_table" value="0.02" type="double"/>
+              <param name="max_palm_dist_to_table" value="0.05" type="double"/>
+              <param name="data_recording_path" value="$(arg sim_data_path)" type="string"/>
+              <param name="save_grasp_snap" value="True" type="bool"/>
+              <param name="smooth_plan_traj" value="True" type="bool"/>
+              <param name="active" value="True" type="bool"/>
+            </node>
+
+            <node name="grasp_client_node" pkg="grasp_pipeline" type="active_planning_sim_client.py" 
+                output="screen" if="$(arg active_planner)">
+              <param name="use_sim" value="true" type="bool"/>
+              <param name="num_grasps_per_object" value="10" type="int"/>
+              <param name="save_visual_data_pre_path" value="$(arg sim_data_path)" type="string"/>
+              <param name="use_hd" value="$(arg use_hd_arg)" type="bool"/>
+              <param name="min_palm_dist_to_table" value="0.02" type="double"/>
+              <param name="max_palm_dist_to_table" value="0.05" type="double"/>
+              <param name="data_recording_path" value="$(arg sim_data_path)" type="string"/>
+              <param name="save_grasp_snap" value="True" type="bool"/>
+              <param name="smooth_plan_traj" value="True" type="bool"/>
+              <param name="active" value="True" type="bool"/>
+            </node>
+        </group>
+
+        <group unless="$(arg simulation)">
+            <node name="grasp_client_node" pkg="grasp_pipeline" type="active_planning_real_client.py" 
+                output="screen" if="$(arg active_planner)">
+              <param name="use_sim" value="false" type="bool"/>
+              <param name="num_grasps_per_object" value="20" type="int"/>
+              <param name="save_visual_data_pre_path" value="$(arg real_data_path)" type="string"/>
+              <param name="use_hd" value="$(arg use_hd_arg)" type="bool"/>
+              <param name="min_palm_dist_to_table" value="0.02" type="double"/>
+              <param name="max_palm_dist_to_table" value="0.05" type="double"/>
+              <param name="data_recording_path" value="$(arg real_data_path)" type="string"/>
+              <param name="save_grasp_snap" value="True" type="bool"/>
+              <param name="smooth_plan_traj" value="True" type="bool"/>
+              <param name="active" value="True" type="bool"/>
+            </node>
+        </group>
+
+    </group>
 
 </launch>

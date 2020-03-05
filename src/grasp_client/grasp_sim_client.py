@@ -25,17 +25,19 @@ import plot_traj
 import robot_traj_interface
 from grasp_control.srv import *
 import align_object_frame as align_obj
+sys.path.append(rp.get_pkg_dir('hand_services') 
+                + '/scripts')
+from hand_client import handClient
 
 
 class GraspClient:
     def __init__(self):
         rospy.init_node('grasp_client')
-        self.use_sim = rospy.get_param('~use_sim', False)
+        self.use_sim = rospy.get_param('~use_sim', True)
         self.use_hd = rospy.get_param('~use_hd', True)
         self.num_grasps_per_object = rospy.get_param('~num_grasps_per_object', 10)
         self.save_visual_data_pre_path = rospy.get_param('~save_visual_data_pre_path', '')
         self.smooth_plan_traj = rospy.get_param('~smooth_plan_traj', False)
-        self.mount_desired_world = None
         self.set_up_place_range()
         self.mount_desired_world = None
         self.palm_desired_world = None
@@ -66,8 +68,12 @@ class GraspClient:
 
         self.joint_vel_thresh = .1
         self.robot_traj_manager = None
+        self.hand_client = handClient()
 
-        self.queries_num_per_batch = 8
+        self.queries_num_per_batch = 16 #8
+
+        self.active = rospy.get_param('~active', True)
+
 
 
     def set_up_object_name(self, object_name, object_mesh_path=None):
@@ -138,7 +144,7 @@ class GraspClient:
             create_scene_request = ManageMoveitSceneRequest()
             create_scene_request.create_scene = True
             create_scene_request.object_mesh_path = self.object_mesh_path
-            create_scene_request.object_pose = object_pose 
+            create_scene_request.object_pose_world = object_pose 
             self.create_scene_response = create_scene_proxy(create_scene_request) 
             #print self.create_scene_response
         except rospy.ServiceException, e:
@@ -206,6 +212,7 @@ class GraspClient:
         except rospy.ServiceException, e:
             rospy.loginfo('Service grasp_active_learn call failed: %s'%e)
         rospy.loginfo('Service grasp_active_learn is executed.')
+        return self.grasp_al_response.success
 
 
     def active_plan_preshape_client(self, planner_name):
@@ -220,6 +227,7 @@ class GraspClient:
         except rospy.ServiceException, e:
             rospy.loginfo('Service grasp_active_plan call failed: %s'%e)
         rospy.loginfo('Service grasp_active_plan is executed.')
+        return self.grasp_al_response.success
 
 
     def voxel_plan_preshape_client(self, prior_name, grasp_type):
@@ -314,10 +322,12 @@ class GraspClient:
             else:
                 # control_request.allegro_target_joint_state = \
                 #         self.preshape_response.allegro_joint_state[grasp_preshape_idx] 
-                # control_request.allegro_target_joint_state = \
-                #         self.grasp_al_response.full_inf_config.hand_joint_state 
-                control_request.allegro_target_joint_state = \
-                        self.grasp_voxel_response.full_inf_config.hand_joint_state 
+                if self.active:
+                    control_request.allegro_target_joint_state = \
+                            self.grasp_al_response.full_inf_config.hand_joint_state 
+                else:
+                    control_request.allegro_target_joint_state = \
+                            self.grasp_voxel_response.full_inf_config.hand_joint_state 
             self.control_response = control_proxy(control_request) 
         except rospy.ServiceException, e:
             rospy.loginfo('Service control_allegro_config call failed: %s'%e)
@@ -490,53 +500,12 @@ class GraspClient:
         return self.planning_response.success
 
 
-    def arm_movement_client(self):
-        rospy.loginfo('Waiting for service arm_movement.')
-        rospy.wait_for_service('arm_movement')
-        rospy.loginfo('Calling service arm_movement.')
-        try:
-            movement_proxy = rospy.ServiceProxy('arm_movement', MoveArm)
-            movement_request = MoveArmRequest()
-            self.movement_response = movement_proxy(movement_request) 
-            #print self.movement_response
-        except rospy.ServiceException, e:
-            rospy.loginfo('Service arm_movement call failed: %s'%e)
-        rospy.loginfo('Service arm_movement is executed %s.'%str(self.movement_response))
-
-
     def execute_arm_plan(self, send_cmd_manually=False):
         rospy.loginfo('Executing moveit arm plan...')
         if not self.planning_response.success:
             rospy.loginfo('Does not have a plan to execute!')
             return False
         plan_traj = self.planning_response.plan_traj
-
-        # if self.palm_planner is None:
-        #     self.palm_planner = PalmPosePlanner(init_node=False)
-        # 
-        # if self.smooth_plan_traj:
-        #     #Smooth trajectory.
-        #     smooth_success, smooth_traj = \
-        #             self.palm_planner.robot.get_smooth_traj(plan_traj)
-        #     rospy.loginfo('Trajectory smoothing success: %s.'%str(smooth_success))
-        #     if smooth_success:
-        #         plan_traj = smooth_traj
-
-        # if send_cmd_manually:
-        #     self.palm_planner.plot_traj(plan_traj)
-
-        #     # send to robot:
-        #     send_cmd = raw_input('send to robot? (y/n)')
-        #     if(send_cmd == 'y'):
-        #         self.palm_planner.robot.send_jtraj(plan_traj)
-        #         #raw_input('Hit any key to keep going after the robot control is done!')
-        #         #TO DO: make sure the robot finishing executing the trajectory before returning.
-        #         return True
-        #     return False
-        # else:
-        #     # send to robot:
-        #     self.palm_planner.robot.send_jtraj(plan_traj)
-        #     return True
 
         if self.robot_traj_manager is None:
             self.robot_traj_manager = robot_traj_interface.robotTrajInterface(init_node=False)
@@ -566,22 +535,6 @@ class GraspClient:
             return True
 
 
-    def grasp_client(self, top_grasp):
-        rospy.loginfo('Waiting for service grasp.')
-        rospy.wait_for_service('grasp')
-        rospy.loginfo('Calling service grasp.')
-        try:
-            grasp_proxy = rospy.ServiceProxy('grasp', GraspAllegro)
-            grasp_request = GraspAllegroRequest()
-            grasp_request.joint_vel_thresh = self.joint_vel_thresh 
-            grasp_request.top_grasp = top_grasp
-            self.grasp_response = grasp_proxy(grasp_request) 
-            #print self.grasp_response
-        except rospy.ServiceException, e:
-            rospy.loginfo('Service grasp call failed: %s'%e)
-        rospy.loginfo('Service grasp is executed %s.'%self.grasp_response.success)
-
-
     def grasp_control_client(self, grasp_type='prec', non_thumb_speed=0.2, thumb_speed=0.25):
     #def grasp_control_client(self, grasp_type='prec', non_thumb_speed=0.1, thumb_speed=0.15):
         rospy.loginfo('Waiting for service grasp_control.')
@@ -599,6 +552,22 @@ class GraspClient:
         except rospy.ServiceException, e:
             rospy.loginfo('Service grasp call failed: %s'%e)
         rospy.loginfo('Service grasp is executed %s.'%self.grasp_response.success)
+
+
+    def hand_grasp_control(self, grasp_type='prec'):
+        if grasp_type == 'prec':
+            joint_idx = [1, 2, 5, 6, 9, 10, 14, 15]
+        elif grasp_type == 'power':
+            joint_idx = [1, 2, 3, 5, 6, 7, 9, 10, 11, 14, 15]
+        else:
+            rospy.logerr('Wrong grasp type for grasp controller!')
+            return
+        self.hand_client.grasp_object(joint_idx)
+        cur_js = self.hand_client.get_joint_state() 
+        increase_stiffness_times = 2 #3
+        for i in xrange(increase_stiffness_times):
+            rospy.sleep(0.2)
+            _, cur_js = self.hand_client.increase_stiffness(joint_idx, cur_js)
 
 
     def clean_moveit_scene_client(self):
@@ -692,29 +661,6 @@ class GraspClient:
                       %str(self.planning_response.success))
 
 
-    def place_arm_movement_client(self):
-        rospy.loginfo('Move the arm to palce the object back.')
-        place_x_loc = np.random.uniform(self.place_x_min, self.place_x_max) 
-        place_y_loc = np.random.uniform(self.place_y_min, self.place_y_max) 
-        place_pose = copy.deepcopy(self.mount_desired_world.pose)
-        place_pose.position.x = place_x_loc
-        place_pose.position.y = place_y_loc
-        #print 'place_pose:', place_pose
-        self.arm_moveit_planner_client(place_goal_pose=place_pose)
-        self.arm_movement_client()
-
-
-    def place_control_allegro_client(self):
-        rospy.loginfo('Open the allegro hand to place the object.')
-        self.control_allegro_config_client(go_home=True)
-
-
-    def move_arm_home_client(self):
-        rospy.loginfo('Move the arm to go home.')
-        self.arm_moveit_planner_client(go_home=True)
-        self.arm_movement_client()
-
-
     def move_arm_home(self):
         rospy.loginfo('Move the arm to go home.')
         self.arm_moveit_planner_client(go_home=True)
@@ -735,7 +681,10 @@ class GraspClient:
 
 
     # def record_grasp_data_client(self, grasp_preshape_idx):
-    def record_grasp_data_client(self, prior_name):
+    def record_voxel_data_client(self, prior_name=''):
+        '''
+            Record the voxel-based grasp planning data.
+        '''
         # TODO: get the voxel grid and object sizes from the active learner 
         # and save these.
         rospy.loginfo('Waiting for service record_grasp_data.')
@@ -743,8 +692,8 @@ class GraspClient:
         rospy.loginfo('Calling service record_grasp_data.')
         self.save_grasp_visual_data()
         try:
-            record_grasp_data_proxy = rospy.ServiceProxy('record_grasp_data', GraspDataRecording)
-            record_grasp_data_request = GraspDataRecordingRequest()
+            record_grasp_data_proxy = rospy.ServiceProxy('record_grasp_data', SimGraspData)
+            record_grasp_data_request = SimGraspDataRequest()
             record_grasp_data_request.object_name = self.object_name
             record_grasp_data_request.grasp_id = self.grasp_id
             record_grasp_data_request.time_stamp = time.time()
@@ -800,7 +749,7 @@ class GraspClient:
             record_grasp_data_request.inf_suc_prob = self.grasp_voxel_response.inf_suc_prob
             record_grasp_data_request.inf_log_prior = self.grasp_voxel_response.inf_log_prior
 
-            record_grasp_data_request.prior_name = prior_name 
+            #record_grasp_data_request.prior_name = prior_name 
 
             self.record_grasp_data_response = record_grasp_data_proxy(record_grasp_data_request) 
             rospy.loginfo('****' + str(self.record_grasp_data_response))
@@ -812,14 +761,17 @@ class GraspClient:
         self.save_lift_visual_data()
         
 
-    def record_data_client_no_plan(self, prior_name):
+    def record_voxel_np_data_client(self, prior_name=''):
+        '''
+            Record the voxel-based data without motion plans.
+        '''
         rospy.loginfo('Waiting for service record_grasp_data.')
         rospy.wait_for_service('record_grasp_data')
         rospy.loginfo('Calling service record_grasp_data.')
         self.save_grasp_visual_data()
         try:
-            record_grasp_data_proxy = rospy.ServiceProxy('record_grasp_data', GraspDataRecording)
-            record_grasp_data_request = GraspDataRecordingRequest()
+            record_grasp_data_proxy = rospy.ServiceProxy('record_grasp_data', SimGraspData)
+            record_grasp_data_request = SimGraspDataRequest()
             record_grasp_data_request.object_name = self.object_name
             record_grasp_data_request.grasp_id = self.grasp_id
             record_grasp_data_request.time_stamp = time.time()
@@ -849,6 +801,155 @@ class GraspClient:
             record_grasp_data_request.inf_log_prior = self.grasp_voxel_response.inf_log_prior
 
             record_grasp_data_request.prior_name = prior_name 
+
+            self.record_grasp_data_response = record_grasp_data_proxy(record_grasp_data_request) 
+            rospy.loginfo('****' + str(self.record_grasp_data_response))
+        except rospy.ServiceException, e:
+            rospy.loginfo('Service record_grasp_data call failed: %s'%e)
+        rospy.loginfo('Service record_grasp_data is executed %s.'%self.record_grasp_data_response.save_h5_success)
+
+        self.record_grasp_data_request = record_grasp_data_request
+
+
+    def record_active_data_client(self):
+        '''
+            Record the active learning grasp data.
+        '''
+        # TODO: get the voxel grid and object sizes from the active learner 
+        # and save these.
+        rospy.loginfo('Waiting for service record_grasp_data.')
+        rospy.wait_for_service('record_grasp_data')
+        rospy.loginfo('Calling service record_grasp_data.')
+        self.save_grasp_visual_data()
+        try:
+            record_grasp_data_proxy = rospy.ServiceProxy('record_grasp_data', SimGraspData)
+            record_grasp_data_request = SimGraspDataRequest()
+            record_grasp_data_request.object_name = self.object_name
+            record_grasp_data_request.grasp_id = self.grasp_id
+            record_grasp_data_request.time_stamp = time.time()
+
+            grasp_label = self.get_grasp_label()
+            record_grasp_data_request.grasp_success_label = grasp_label 
+
+            # Record the grasp preshape image from gazebo
+            if self.save_grasp_snap and self.gazebo_preshape_img is not None:
+                if grasp_label:
+                    path_preshape_rgb = self.save_visual_data_pre_path + \
+                        'gazebo_rgb_image/suc_preshapes/' + 'object_' + str(self.cur_object_id) + '_' + str(self.object_name) + \
+                        '_preshape_' + str(self.grasp_id) + '.png' 
+                else:
+                    path_preshape_rgb = self.save_visual_data_pre_path + \
+                        'gazebo_rgb_image/fail_preshapes/' + 'object_' + str(self.cur_object_id) + '_' + str(self.object_name) + \
+                        '_preshape_' + str(self.grasp_id) + '.png' 
+                cv2.imwrite(path_preshape_rgb, self.gazebo_preshape_img)
+
+            # Record the grasp image from gazebo
+            if self.save_grasp_snap and self.gazebo_rgb_image_msg is not None:
+                self.gazebo_rgb_image = self.bridge.imgmsg_to_cv2(self.gazebo_rgb_image_msg, "bgr8")
+                if grasp_label:
+                    path_to_save_gazebo_rgb = self.save_visual_data_pre_path + \
+                        'gazebo_rgb_image/suc_grasps/' + 'object_' + str(self.cur_object_id) + '_' + str(self.object_name) + \
+                        '_grasp_' + str(self.grasp_id) + '.png' 
+                else:
+                    path_to_save_gazebo_rgb = self.save_visual_data_pre_path + \
+                        'gazebo_rgb_image/fail_grasps/' + 'object_' + str(self.cur_object_id) + '_' + str(self.object_name) + \
+                        '_grasp_' + str(self.grasp_id) + '.png' 
+
+                cv2.imwrite(path_to_save_gazebo_rgb, self.gazebo_rgb_image)
+
+
+            record_grasp_data_request.object_world_seg_pose = self.object_world_seg_pose
+            record_grasp_data_request.object_world_sim_pose = self.object_world_sim_pose 
+            # record_grasp_data_request.preshape_palm_world_pose = \
+            #         self.preshape_response.palm_goal_pose_world[grasp_preshape_idx]
+            # record_grasp_data_request.preshape_allegro_joint_state = \
+            #         self.preshape_response.allegro_joint_state[grasp_preshape_idx] 
+            record_grasp_data_request.preshape_palm_world_pose = \
+                    self.grasp_al_response.full_inf_config.palm_pose
+            record_grasp_data_request.preshape_allegro_joint_state = \
+                    self.grasp_al_response.full_inf_config.hand_joint_state
+
+            record_grasp_data_request.true_preshape_joint_state = self.true_preshape_hand_js
+            record_grasp_data_request.true_preshape_palm_world_pose = self.true_palm_pose_world
+            record_grasp_data_request.close_shape_allegro_joint_state = self.close_hand_js  
+            record_grasp_data_request.close_shape_palm_world_pose = self.close_palm_pose_world 
+            record_grasp_data_request.lift_shape_allegro_joint_state = self.lift_hand_js  
+            record_grasp_data_request.lift_shape_palm_world_pose = self.lift_palm_pose_world 
+            # record_grasp_data_request.top_grasp = self.preshape_response.is_top_grasp[grasp_preshape_idx] 
+
+            record_grasp_data_request.sparse_voxel_grid = self.grasp_al_response.sparse_voxel_grid
+            record_grasp_data_request.object_size = self.grasp_al_response.object_size
+
+            record_grasp_data_request.init_config_array = self.grasp_al_response.init_config_array
+            record_grasp_data_request.inf_config_array = self.grasp_al_response.inf_config_array
+
+            record_grasp_data_request.init_ik_config_array = self.grasp_al_response.init_ik_config_array
+            record_grasp_data_request.inf_ik_config_array = self.grasp_al_response.inf_ik_config_array
+
+            record_grasp_data_request.init_val = self.grasp_al_response.init_val
+            record_grasp_data_request.init_suc_prob = self.grasp_al_response.init_suc_prob
+            record_grasp_data_request.init_log_prior = self.grasp_al_response.init_log_prior
+            record_grasp_data_request.init_uct = self.grasp_al_response.init_uct
+
+            record_grasp_data_request.inf_val = self.grasp_al_response.inf_val
+            record_grasp_data_request.inf_suc_prob = self.grasp_al_response.inf_suc_prob
+            record_grasp_data_request.inf_log_prior = self.grasp_al_response.inf_log_prior
+            record_grasp_data_request.inf_uct = self.grasp_al_response.inf_uct
+            record_grasp_data_request.reward = self.grasp_al_response.reward
+            record_grasp_data_request.action = self.grasp_al_response.action
+
+            self.record_grasp_data_response = record_grasp_data_proxy(record_grasp_data_request) 
+            rospy.loginfo('****' + str(self.record_grasp_data_response))
+        except rospy.ServiceException, e:
+            rospy.loginfo('Service record_grasp_data call failed: %s'%e)
+        rospy.loginfo('Service record_grasp_data is executed %s.'%self.record_grasp_data_response.save_h5_success)
+
+        self.record_grasp_data_request = record_grasp_data_request
+        self.save_lift_visual_data()
+        
+
+    def record_active_np_data_client(self):
+        '''
+            Record the active learning grasp data without motion plans.
+        '''
+        rospy.loginfo('Waiting for service record_grasp_data.')
+        rospy.wait_for_service('record_grasp_data')
+        rospy.loginfo('Calling service record_grasp_data.')
+        self.save_grasp_visual_data()
+        try:
+            record_grasp_data_proxy = rospy.ServiceProxy('record_grasp_data', SimGraspData)
+            record_grasp_data_request = SimGraspDataRequest()
+            record_grasp_data_request.object_name = self.object_name
+            record_grasp_data_request.grasp_id = self.grasp_id
+            record_grasp_data_request.time_stamp = time.time()
+
+            grasp_label = -1
+            record_grasp_data_request.grasp_success_label = grasp_label 
+
+            record_grasp_data_request.object_world_seg_pose = self.object_world_seg_pose
+            record_grasp_data_request.object_world_sim_pose = self.object_world_sim_pose 
+            record_grasp_data_request.preshape_palm_world_pose = \
+                    self.grasp_al_response.full_inf_config.palm_pose
+            record_grasp_data_request.preshape_allegro_joint_state = \
+                    self.grasp_al_response.full_inf_config.hand_joint_state
+
+            record_grasp_data_request.sparse_voxel_grid = self.grasp_al_response.sparse_voxel_grid
+            record_grasp_data_request.object_size = self.grasp_al_response.object_size
+
+            record_grasp_data_request.init_config_array = self.grasp_al_response.init_config_array
+            record_grasp_data_request.inf_config_array = self.grasp_al_response.inf_config_array
+
+            record_grasp_data_request.init_val = self.grasp_al_response.init_val
+            record_grasp_data_request.init_suc_prob = self.grasp_al_response.init_suc_prob
+            record_grasp_data_request.init_log_prior = self.grasp_al_response.init_log_prior
+            record_grasp_data_request.init_uct = self.grasp_al_response.init_uct
+
+            record_grasp_data_request.inf_val = self.grasp_al_response.inf_val
+            record_grasp_data_request.inf_suc_prob = self.grasp_al_response.inf_suc_prob
+            record_grasp_data_request.inf_log_prior = self.grasp_al_response.inf_log_prior
+            record_grasp_data_request.inf_uct = self.grasp_al_response.inf_uct
+            record_grasp_data_request.reward = self.grasp_al_response.reward
+            record_grasp_data_request.action = self.grasp_al_response.action
 
             self.record_grasp_data_response = record_grasp_data_proxy(record_grasp_data_request) 
             rospy.loginfo('****' + str(self.record_grasp_data_response))
@@ -916,7 +1017,8 @@ class GraspClient:
             return False
         # self.gen_grasp_preshape_client()
         if planner_name is None:
-            self.active_learn_preshape_client()
+            al_success = self.active_learn_preshape_client()
+            return al_success
         else:
             self.active_plan_preshape_client(planner_name)
         return True
@@ -945,14 +1047,18 @@ class GraspClient:
         moveit_found_plan = self.arm_moveit_planner_client()
         if not moveit_found_plan:
             return False
-        #self.arm_movement_client()
         if not self.execute_arm_plan():
             return False
 
         self.true_palm_pose_world = self.listen_true_palm_pose()
         self.true_preshape_hand_js = self.true_hand_joint_state
 
+        self.gazebo_preshape_img = None
+        self.gazebo_preshape_img = self.bridge.imgmsg_to_cv2(
+                                    self.gazebo_rgb_image_msg, "bgr8")
+
         self.grasp_control_client()
+        # self.hand_grasp_control()
 
         self.close_palm_pose_world = self.listen_true_palm_pose()
         self.close_hand_js = self.true_hand_joint_state 
@@ -978,8 +1084,8 @@ class GraspClient:
         return True
 
 
-    def place_object_steps(self, move_arm=True):
-        self.place_control_allegro_client()
+    def move_robot_home(self, move_arm=True):
+        self.control_allegro_config_client(go_home=True)
         if move_arm:
             self.move_arm_home()
 

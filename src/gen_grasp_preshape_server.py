@@ -83,7 +83,6 @@ class GenGraspPreshape():
     def __init__(self):
         rospy.init_node('gen_grasp_preshape_server')
         # Read parameters from server
-        self.use_sim = rospy.get_param('~use_sim', False)
         self.use_bb_orientation = rospy.get_param('~use_bb_orientation',True)
         #self.hand_sample_dist = rospy.get_param('~hand_sample_dist', 0.03)
         # Due to gravity, the hand will be lower than the goal pose for top grasps in simulation. 
@@ -244,14 +243,13 @@ class GenGraspPreshape():
 
 
     def broadcast_palm_and_obj(self):
-        #if self.service_is_called and not self.use_sim:
         if self.service_is_called:
             # Publish the object tf
-            self.tf_br.sendTransform((self.object_pose.pose.position.x, self.object_pose.pose.position.y, 
-                    self.object_pose.pose.position.z),
-                    (self.object_pose.pose.orientation.x, self.object_pose.pose.orientation.y, 
-                    self.object_pose.pose.orientation.z, self.object_pose.pose.orientation.w),
-                    rospy.Time.now(), 'object_pose', self.object_pose.header.frame_id)
+            # self.tf_br.sendTransform((self.object_pose.pose.position.x, self.object_pose.pose.position.y, 
+            #         self.object_pose.pose.position.z),
+            #         (self.object_pose.pose.orientation.x, self.object_pose.pose.orientation.y, 
+            #         self.object_pose.pose.orientation.z, self.object_pose.pose.orientation.w),
+            #         rospy.Time.now(), 'object_pose', self.object_pose.header.frame_id)
 
             # Publish the palm goal tf
             for i, palm_pose_world in enumerate(self.palm_goal_pose_world):
@@ -608,8 +606,8 @@ if __name__ == '__main__':
     gen_grasp_preshape = GenGraspPreshape()
     gen_grasp_preshape.create_preshape_server()
     # gen_grasp_preshape.update_detection_grasp_server()
-    # rate = rospy.Rate(100)
-    # while not rospy.is_shutdown():
-    #     gen_grasp_preshape.broadcast_palm_and_obj()
-    #     rate.sleep()
-    rospy.spin()
+    rate = rospy.Rate(100)
+    while not rospy.is_shutdown():
+        gen_grasp_preshape.broadcast_palm_and_obj()
+        rate.sleep()
+    # rospy.spin()

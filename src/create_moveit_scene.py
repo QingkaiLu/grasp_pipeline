@@ -5,6 +5,8 @@ import rospy
 from moveit_commander import RobotCommander, PlanningSceneInterface, roscpp_initialize, roscpp_shutdown
 from geometry_msgs.msg import PoseStamped
 from gazebo_msgs.msg import ModelStates
+#from geometry_msgs.msg import Pose, Quaternion
+#import tf
 
 #To do: change this file to a ros server to load different objects.
 class CreateMoveitScene:
@@ -36,7 +38,7 @@ class CreateMoveitScene:
         obj_pose.pose.position = self.obj_pos
         obj_pose.pose.orientation = self.obj_ort
         scene.add_mesh('grasping_object', obj_pose, 
-                '/home/qingkai/Workspace/urlg_robot_ws/src/urlg_robots_gazebo/worlds/objects/pringle/optimized_poisson_texture_mapped_mesh.dae')
+                '/home/kai/Workspace/urlg_robot_ws/src/urlg_robots_gazebo/worlds/objects/pringle/optimized_poisson_texture_mapped_mesh.dae')
        
         box_pose = PoseStamped()
         #p.header.frame_id = robot.get_planning_frame()

@@ -257,7 +257,6 @@ bool saveVisualData(grasp_pipeline::SaveVisualData::Request &req,
 
         // pcl::PointCloud<pcl::Normal>::Ptr sd_cloud_normal_ptr = getSdCloudNormals(raw_sd_cloud_ptr);
         // pcl::toROSMsg(*sd_cloud_normal_ptr, res.scene_sd_cloud_normal);
-        // pcl::io::savePCDFile(req.sd_cloud_normal_save_path, *sd_cloud_normal_ptr, true);
     }
     
     // bool view_normals = false;

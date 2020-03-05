@@ -3,15 +3,15 @@
 import os
 import rospy
 import time
-from grasp_client import GraspClient 
+from grasp_sim_client import GraspClient 
 
 
 if __name__ == '__main__':
     dc_client = GraspClient()
     # dataset_dir = '/mnt/tars_data/sim_dataset/BigBird/BigBird_mesh'
-    dataset_name = 'BigBird'
+    # dataset_name = 'BigBird'
     # dataset_name = 'GraspDatabase'
-    # dataset_name = 'YCB'
+    dataset_name = 'YCB'
     dataset_dir = '/mnt/tars_data/sim_dataset/' + dataset_name \
                     + '/' + dataset_name + '_mesh'
     object_mesh_dirs = os.listdir(dataset_dir)
@@ -30,6 +30,9 @@ if __name__ == '__main__':
                        #'progresso_new_england_clam_chowder', 
                        'listerine_green', 'hersheys_bar', 'mahatma_rice', 
                        'paper_plate'}
+    ycb_objects_exclude = {'006_mustard_bottle', '012_strawberry', 
+                            '058_golf_ball', '062_dice', '063-b_marbles', 
+                            '070-a_colored_wood_blocks', '070-b_colored_wood_blocks'}
     #exclude_object = 'windex'
     skip_object = True
     # grasp_failure_retry_times = dc_client.num_grasps_per_object
@@ -49,6 +52,9 @@ if __name__ == '__main__':
 
         if dataset_name == 'BigBird' and object_name in bigbird_objects_exclude:
             continue
+
+        if dataset_name == 'YCB' and object_name in ycb_objects_exclude:
+                        continue
 
         #if object_name == exclude_object:
         #    skip_object = False
@@ -111,13 +117,13 @@ if __name__ == '__main__':
                 if not grasp_arm_plan:
                     rospy.logerr('Can not find moveit plan to grasp.\n')
                     grasp_plan_failures_num += 1
-                    dc_client.record_data_client_no_plan()
+                    dc_client.record_active_np_data_client()
                     # dc_client.place_object_steps(move_arm=grasp_arm_plan)
                     # continue
                 else:
-                    dc_client.record_grasp_data_client()
+                    dc_client.record_active_data_client()
 
-                dc_client.place_object_steps(move_arm=grasp_arm_plan)
+                # dc_client.place_object_steps(move_arm=grasp_arm_plan)
 
                 #TODO: Check batch id and update the active learning model 
                 # if a whole new batch is generated

@@ -12,7 +12,8 @@ import moveit_commander
 #import geometry_msgs.msg
 #from geometry_msgs.msg import PoseStamped,Pose
 import numpy as np
-import copy
+from trac_ik_python.trac_ik import IK
+
 
 class CartesianPoseMoveitPlanner:
     def __init__(self):
@@ -22,53 +23,76 @@ class CartesianPoseMoveitPlanner:
         self.robot = moveit_commander.RobotCommander()
         self.scene = moveit_commander.PlanningSceneInterface()
         self.group = moveit_commander.MoveGroupCommander('kuka_arm')
+        #Reference link: https://answers.ros.org/question/255792/change-planner-in-moveit-python/
+        #self.group.set_planner_id('RRTstarkConfigDefault')
+        self.group.set_planner_id('RRTConnectkConfigDefault')
+        self.group.set_planning_time(10)
+        self.group.set_num_planning_attempts(3)
+        #self.group.set_planning_time(15)
+        #self.group.set_num_planning_attempts(1)
 
+        self.zero_joint_states = np.zeros(7) 
+        self.left_home_pose = False
+        if self.left_home_pose:
+            self.home_joint_states = np.array([0.0001086467455024831, 0.17398914694786072, -0.00015721925592515618, 
+                                                -1.0467143058776855, 0.0006054198020137846, 
+                                                -0.00030679398332722485, 3.3859387258416973e-06])
+        else:
+            self.home_joint_states = np.array([0.0001086467455024831, -0.17398914694786072, 0.00015721925592515618, 
+                                                1.0467143058776855, 0.0006054198020137846, 
+                                                -0.00030679398332722485, 3.3859387258416973e-06])
+        self.ik_solver = IK('world', 'allegro_mount')
+        self.seed_state = [0.0] * self.ik_solver.number_of_joints
+
+        
     def go_home(self):
-        #print 'go home'
+        print 'go home'
         self.group.clear_pose_targets()
-        self.group.set_joint_value_target(np.zeros(7))
+        self.group.set_joint_value_target(self.home_joint_states)
+        plan_home = self.group.plan()
+        return plan_home
+
+    def go_zero(self):
+        print 'go zero'
+        self.group.clear_pose_targets()
+        self.group.set_joint_value_target(self.zero_joint_states)
         plan_home = self.group.plan()
         return plan_home
 
     def go_goal(self, pose):
-        #print 'go goal'
+        print 'go goal'
         self.group.clear_pose_targets()
         self.group.set_pose_target(pose)
         plan_goal = self.group.plan()
         return plan_goal
 
-    def lift_up_way_points(self, cur_pose, height=0.3):
-        print 'Lift up with way points.'
-        #self.group.clear_pose_targets()
-        #self.group.set_pose_target(pose)
-        way_points = []
-        #start with the current pose
-        #cur_pose = self.group.get_current_pose().pose
-        way_points.append(copy.deepcopy(cur_pose))
-        lift_steps = 20
-        height_step = height / float(lift_steps)
-        for i in xrange(lift_steps):
-            cur_pose.position.z += height_step 
-            way_points.append(copy.deepcopy(cur_pose)) 
-        print way_points
-        (plan_way_points, fraction) = self.group.compute_cartesian_path(
-                way_points,   # waypoints to follow
-                0.01,        # eef_step
-                0.0)         # jump_threshold
-        print plan_way_points
-        return plan_way_points
+    def go_goal_trac_ik(self, pose):
+        print 'go goal'
+        self.group.clear_pose_targets()
+        ik_js = self.ik_solver.get_ik(self.seed_state, pose.position.x, pose.position.y, pose.position.z,
+                                        pose.orientation.x, pose.orientation.y, pose.orientation.z, 
+                                        pose.orientation.w)
+        if ik_js is None:
+            rospy.logerr('No IK solution for motion planning!')
+            return None
+        self.group.set_joint_value_target(np.array(ik_js))
+        plan_goal = self.group.plan()
+        return plan_goal
 
     def handle_pose_goal_planner(self, req):
         plan = None
         if req.go_home:
             plan = self.go_home()
-        elif req.lift_way_points:
-            plan = self.lift_up_way_points(req.palm_goal_pose_world, req.lift_height)
+        elif req.go_zero:
+            plan = self.go_zero()
         else:
-            plan = self.go_goal(req.palm_goal_pose_world)
+            # plan = self.go_goal(req.palm_goal_pose_world)
+            plan = self.go_goal_trac_ik(req.palm_goal_pose_world)
         #print plan
         response = PalmGoalPoseWorldResponse()
         response.success = False
+        if plan is None:
+            return response
         if len(plan.joint_trajectory.points) > 0:
             response.success = True
             response.plan_traj = plan.joint_trajectory
@@ -96,6 +120,6 @@ class CartesianPoseMoveitPlanner:
 if __name__ == '__main__':
     planner = CartesianPoseMoveitPlanner()
     planner.create_moveit_planner_server()
-    planner.create_arm_movement_server()
+    # planner.create_arm_movement_server()
     rospy.spin()
 

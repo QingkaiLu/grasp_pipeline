@@ -10,19 +10,26 @@ import numpy as np
 import h5py
 
 
-class RecordGraspData():
+class RecordActiveData():
     def __init__(self):
         rospy.init_node('record_grasp_data_server')
         self.num_grasps_per_object = rospy.get_param('~num_grasps_per_object', 10)
         self.data_recording_path = rospy.get_param('~data_recording_path', '/mnt/tars_data/multi_finger_grasp_data/')
-        self.use_hd = rospy.get_param('~use_hd', True)
         self.grasp_file_name = self.data_recording_path + 'grasp_data.h5'
-        self.initialize_data_file()
+        self.suc_grasp_file_name = self.data_recording_path + 'suc_grasp_data.h5'
+        self.failure_grasp_file_name = self.data_recording_path + 'failure_grasp_data.h5'
+        self.initialize_active_files()
+
+
+    def initialize_active_files(self):
+        self.initialize_data_file(self.grasp_file_name)
+        self.initialize_data_file(self.suc_grasp_file_name)
+        self.initialize_data_file(self.failure_grasp_file_name)
         
 
-    def initialize_data_file(self):
+    def initialize_data_file(self, file_name):
         #a: Read/write if exists, create otherwise (default)
-        grasp_file = h5py.File(self.grasp_file_name, 'a')
+        grasp_file = h5py.File(file_name, 'a')
         hand_joint_state_name = ['index_joint_0','index_joint_1','index_joint_2', 'index_joint_3',
                    'middle_joint_0','middle_joint_1','middle_joint_2', 'middle_joint_3',
                    'ring_joint_0','ring_joint_1','ring_joint_2', 'ring_joint_3',
@@ -49,15 +56,38 @@ class RecordGraspData():
     
 
     def handle_record_grasp_data(self, req):
-        #'r+': Read/write, file must exist
+        self.record_grasp_data(req)
         grasp_file = h5py.File(self.grasp_file_name, 'r+')
-        if req.grasp_id == 0:
-            grasp_file['max_object_id'][()] +=1
-            grasp_file['cur_object_name'][()] = req.object_name
+        object_id = grasp_file['max_object_id'][()]
+        grasp_file.close()
+        if req.grasp_success_label == 1:
+            self.record_grasp_data(req, self.suc_grasp_file_name, object_id)
+        elif req.grasp_success_label == 0:
+            self.record_grasp_data(req, self.failure_grasp_file_name, object_id)
+        else:
+            rospy.logerr('Wrong grasp label for data recording!')
 
-        # [()] is the way to get the scalar value from h5 file.
-        #object_id = grasp_file['max_object_id'][()] + 1 
-        object_id = grasp_file['max_object_id'][()] 
+        response = SimGraspDataResponse()
+        response.object_id = object_id
+        response.save_h5_success = True
+        grasp_file.close()
+        return response
+
+
+    def record_grasp_data(self, req, file_name=None, object_id=None):
+        if file_name is None:
+            #'r+': Read/write, file must exist
+            grasp_file = h5py.File(self.grasp_file_name, 'r+')
+            if req.grasp_id == 0:
+                grasp_file['max_object_id'][()] +=1
+                grasp_file['cur_object_name'][()] = req.object_name
+
+            # [()] is the way to get the scalar value from h5 file.
+            #object_id = grasp_file['max_object_id'][()] + 1 
+            object_id = grasp_file['max_object_id'][()] 
+        else:
+            grasp_file = h5py.File(file_name, 'r+')
+
         object_grasp_id = 'object_' + str(object_id) + '_grasp_' + str(req.grasp_id)
         
         global_grasp_id = grasp_file['total_grasps_num'][()]
@@ -83,6 +113,10 @@ class RecordGraspData():
         if object_size_key not in grasp_file:
             grasp_file.create_dataset(object_size_key, data=req.object_size)
 
+        init_ik_config_array_key = object_grasp_id + '_init_ik_config_array'
+        if init_ik_config_array_key not in grasp_file:
+            grasp_file.create_dataset(init_ik_config_array_key, data=req.init_ik_config_array)
+
         init_config_array_key = object_grasp_id + '_init_config_array'
         if init_config_array_key not in grasp_file:
             grasp_file.create_dataset(init_config_array_key, data=req.init_config_array)
@@ -98,6 +132,14 @@ class RecordGraspData():
         init_log_prior_key = object_grasp_id + '_init_log_prior' 
         if init_log_prior_key not in grasp_file:
             grasp_file.create_dataset(init_log_prior_key, data=req.init_log_prior)
+
+        init_uct_key = object_grasp_id + '_init_uct' 
+        if init_uct_key not in grasp_file:
+            grasp_file.create_dataset(init_uct_key, data=req.init_uct)
+
+        inf_ik_config_array_key = object_grasp_id + '_inf_ik_config_array'
+        if inf_ik_config_array_key not in grasp_file:
+            grasp_file.create_dataset(inf_ik_config_array_key, data=req.inf_ik_config_array)
 
         inf_config_array_key = object_grasp_id + '_inf_config_array'
         if inf_config_array_key not in grasp_file:
@@ -115,9 +157,17 @@ class RecordGraspData():
         if inf_log_prior_key not in grasp_file:
             grasp_file.create_dataset(inf_log_prior_key, data=req.inf_log_prior)
 
-        prior_name_key = object_grasp_id + '_prior_name' 
-        if prior_name_key not in grasp_file:
-            grasp_file.create_dataset(prior_name_key, data=req.prior_name)
+        inf_uct_key = object_grasp_id + '_inf_uct' 
+        if inf_uct_key not in grasp_file:
+            grasp_file.create_dataset(inf_uct_key, data=req.inf_uct)
+
+        reward_key = object_grasp_id + '_reward' 
+        if reward_key not in grasp_file:
+            grasp_file.create_dataset(reward_key, data=req.reward)
+
+        action_key = object_grasp_id + '_action' 
+        if action_key not in grasp_file:
+            grasp_file.create_dataset(action_key, data=req.action)
 
         preshape_palm_world_pose_list = [req.preshape_palm_world_pose.pose.position.x, req.preshape_palm_world_pose.pose.position.y,
                req.preshape_palm_world_pose.pose.position.z, req.preshape_palm_world_pose.pose.orientation.x, 
@@ -207,19 +257,16 @@ class RecordGraspData():
             grasp_file.create_dataset(top_grasp_key,
                     data=req.top_grasp)
 
-        response = GraspDataRecordingResponse()
-        response.object_id = object_id
-        response.save_h5_success = True
-        grasp_file.close()
-        return response
 
     def create_record_data_server(self):
-        rospy.Service('record_grasp_data', GraspDataRecording, self.handle_record_grasp_data)
+        rospy.Service('record_grasp_data', SimGraspData, self.handle_record_grasp_data)
         rospy.loginfo('Service record_grasp_data:')
         rospy.loginfo('Ready to record grasp data.')
 
+
 if __name__ == '__main__':
-    record_grasp_data = RecordGraspData()
-    record_grasp_data.create_record_data_server()
+    record_active_data = RecordActiveData()
+    record_active_data.create_record_data_server()
     rospy.spin()
+
 

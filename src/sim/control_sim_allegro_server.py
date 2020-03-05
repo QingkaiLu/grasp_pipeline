@@ -31,7 +31,7 @@ class ControlAllegroConfig:
     def control_allegro(self):
         self.run_rate.sleep()
         rospy.loginfo('Service control_allegro_config:')
-        rospy.loginfo('Joint control type published')
+        rospy.loginfo('Joint control command published')
 
         jc = JointState()
         jc.name = self.allegro_target_joint_state.name
@@ -49,17 +49,16 @@ class ControlAllegroConfig:
     def control_allegro_home(self):
         self.run_rate.sleep()
         rospy.loginfo('Service control_allegro_config:')
-        rospy.loginfo('Joint control type published')
+        rospy.loginfo('Joint control command published')
 
         jc = JointState()
-        jc.name = self.allegro_target_joint_state.name
+        jc.name = self.allegro_init_joint_state.name
         target_joint_angles = np.zeros(self.dof)
         init_joint_angles = np.array(self.allegro_init_joint_state.position)
         delta = (target_joint_angles - init_joint_angles) / self.control_allegro_steps
         jc_angles = init_joint_angles
         for i in xrange(self.control_allegro_steps):
             jc_angles += delta
-            #print i, jc_angles
             jc.position = jc_angles.tolist()
             self.allegro_joint_cmd_pub.publish(jc)
             self.run_rate.sleep()
@@ -86,7 +85,8 @@ class ControlAllegroConfig:
         return response
 
     def create_control_allegro_server(self):
-        control_allegro_service = rospy.Service('control_allegro_config', AllegroConfig, self.handle_control_allegro) 
+        control_allegro_service = rospy.Service('control_allegro_config', 
+                                    AllegroConfig, self.handle_control_allegro) 
         rospy.loginfo('Service control_allegro_config:')
         rospy.loginfo('Ready to control allegro to speficied configurations.')
 

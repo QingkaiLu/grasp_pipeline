@@ -1,4 +1,5 @@
 sensor_msgs/JointState allegro_target_joint_state
+bool close_hand
 bool go_home
 ---
 bool success

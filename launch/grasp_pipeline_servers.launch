@@ -1,31 +1,33 @@
 <?xml version="1.0"?>
+
 <launch>
     <arg name="simulation" value="true"/>
-    <arg name="grasps_num_per_object" value="20"/>
-    <arg name="record_data_path" value="/mnt/tars_data/multi_finger_sim_data/"/>
+    <!--arg name="grasps_num_per_object" value="2"/-->
+    <!--arg name="record_data_path" value="/dataspace/data_kai/al_grasp_queries/"/-->
+    <arg name="real_data_path" value="/mnt/data_qingkai/multi_finger_exp_data/"/>
+    <!--arg name="record_data_path" value="/mnt/tars_data/multi_finger_exp_data/"/-->
+    <arg name="sim_data_path" value="/mnt/tars_data/multi_finger_sim_data/"/>
     <arg name="camera_information_topic" value="/kinect2/hd/camera_info"/>
     <arg name="use_hd_arg" value="true"/>
-    <!--arg name="dataset_name" value="BigBird"/-->
-    <!--arg name="dataset_name" value="GraspDatabase"/-->
-    <arg name="dataset_name" value="YCB"/>
-    <arg name="save_urdf_path_arg" 
-        value="/mnt/tars_data/sim_dataset/$(arg dataset_name)/$(arg dataset_name)_urdf"/>
-    <arg name="object_meshes_path_arg" 
-        value="/mnt/tars_data/sim_dataset/$(arg dataset_name)/$(arg dataset_name)_mesh"/>
-
     <arg name="smooth_plan_traj_arg" value="true"/>
+    <arg name="bag_tactile_data" value="false" if="$(arg simulation)"/>
+    <arg name="bag_visual_data" value="false" if="$(arg simulation)"/>
+    <arg name="bag_tactile_data" value="false" unless="$(arg simulation)"/>
+    <arg name="bag_visual_data" value="true" unless="$(arg simulation)"/>
+    <arg name="active_learning" value="true"/>
 
+    <!--node name="broadcast_calib_tf_node" pkg="robot_camera_calibration" type="broadcast_calib_tf.py" output="screen" /-->
+    <include file="$(find robot_aruco_calibration)/launch/publish_calibration_tf.launch"/>
     <include file="$(find point_cloud_segmentation)/launch/table_obj_segmenter.launch"/>
 
-    <node name="manage_moveit_scene_node" pkg="grasp_pipeline" type="manage_moveit_scene_server.py" output="screen">
+    <node name="manage_moveit_scene_node" pkg="grasp_pipeline" 
+        type="manage_moveit_scene_server.py" output="screen">
       <param name="use_sim" value="true" type="bool" if="$(arg simulation)"/>
       <param name="use_sim" value="false" type="bool" unless="$(arg simulation)"/>
     </node>
 
     <node name="gen_grasp_preshape_server_node" pkg="grasp_pipeline" 
         type="gen_grasp_preshape_server.py" output="screen">
-      <param name="use_sim" value="true" type="bool" if="$(arg simulation)"/>
-      <param name="use_sim" value="false" type="bool" unless="$(arg simulation)"/>
       <param name="hand_sample_dist_top" value="0.1" type="double"/>
       <param name="hand_sample_dist_side" value="0.07" type="double"/>
       <param name="hand_sample_dist_var" value="0.03" type="double"/>
@@ -35,35 +37,61 @@
       <param name="min_object_top_dist_to_table" value="0.03" type="double"/>
     </node>
 
-    <node name="control_allegro_to_config_server_node" pkg="grasp_pipeline" 
-        type="control_allegro_to_config_server.py" output="screen" />
-    <node name="arm_moveit_planner_server_node" pkg="grasp_pipeline" 
+    <node name="arm_moveit_planner_server_node" pkg="grasp_pipeline"
         type="arm_moveit_planner_server.py" output="screen" />
 
-    <node name="record_grasp_data_node" pkg="grasp_pipeline" type="record_grasp_data_server.py" output="screen" >
-      <param name="num_grasps_per_object" value="$(arg grasps_num_per_object)" type="int"/>
-      <param name="data_recording_path" value="$(arg record_data_path)" type="string"/>
-      <param name="camera_info_topic" value="$(arg camera_information_topic)" type="string"/>
-      <param name="use_hd" value="$(arg use_hd_arg)" type="bool"/>
-    </node>
-
-    <group if="$(arg simulation)">
-    <node name="manage_gazebo_scene_node" pkg="grasp_pipeline" type="manage_gazebo_scene_server.py" output="screen" >
-      <param name="save_urdf_path" value="$(arg save_urdf_path_arg)" type="string"/>
-      <param name="object_meshes_path" value="$(arg object_meshes_path_arg)" type="string"/>
-    </node>
-
-    <node name="broadcast_gazebo_kinect_tf_node" pkg="grasp_pipeline" type="broadcast_gazebo_kinect_tf.py" output="screen"/>
-    <node name="gazebo2tf_node" pkg="gazebo2rviz" type="gazebo2tf_node.py" output="screen"/>
-    <node name="trajectory_smoothing_node" pkg="trajectory_smoothing" 
-        type="service" output="screen" if="$(arg smooth_plan_traj_arg)"/>
+    <node name="save_visual_data_node" pkg="grasp_pipeline" type="save_visual_data" output="screen" />
+    <node name="trajectory_smoothing_node" pkg="trajectory_smoothing" type="service" 
+        output="screen" if="$(arg smooth_plan_traj_arg)"/>
     <node name="task_velocity_planner_node" pkg="grasp_pipeline" 
         type="task_velocity_control_server.py" output="screen"/>
-    <node name="grasp_control_server_node" pkg="grasp_control" 
-        type="grasp_control_server.py" output="screen" />
 
-    <node name="save_visual_data_node" pkg="grasp_pipeline" type="save_visual_data" output="screen" />
+    <node name="bag_tactile_data_node" pkg="grasp_pipeline" type="bag_tactile_data_server.py" 
+        output="screen" if="$(arg bag_tactile_data)">
+      <param name="data_recording_path" value="$(arg real_data_path)" type="string"/>
+    </node>
+    <node name="bag_visual_data_node" pkg="grasp_pipeline" type="bag_visual_data_server.py" 
+        output="screen" if="$(arg bag_visual_data)">
+      <param name="data_recording_path" value="$(arg real_data_path)" type="string"/>
+    </node>
 
+    <group unless="$(arg simulation)">
+        <node name="record_grasp_data_node" pkg="grasp_pipeline" 
+            type="record_real_data_server.py" output="screen">
+          <param name="data_recording_path" value="$(arg real_data_path)" type="string"/>
+        </node>
+        <node name="control_real_allegro_server_node" pkg="grasp_pipeline" 
+            type="control_real_allegro_server.py" output="screen" />
     </group>
-   
+
+    <group if="$(arg simulation)">
+        <arg name="dataset_name" value="BigBird"/>
+        <!--arg name="dataset_name" value="GraspDatabase"/-->
+        <!--arg name="dataset_name" value="YCB"/-->
+        <arg name="save_urdf_path_arg" 
+            value="/mnt/tars_data/sim_dataset/$(arg dataset_name)/$(arg dataset_name)_urdf"/>
+        <arg name="object_meshes_path_arg" 
+            value="/mnt/tars_data/sim_dataset/$(arg dataset_name)/$(arg dataset_name)_mesh"/>
+        <node name="manage_gazebo_scene_node" pkg="grasp_pipeline" 
+                type="manage_gazebo_scene_server.py" output="screen">
+          <param name="save_urdf_path" value="$(arg save_urdf_path_arg)" type="string"/>
+          <param name="object_meshes_path" value="$(arg object_meshes_path_arg)" type="string"/>
+        </node>
+        <node name="broadcast_gazebo_kinect_tf_node" pkg="grasp_pipeline" 
+            type="broadcast_gazebo_kinect_tf.py" output="screen"/>
+        <node name="gazebo2tf_node" pkg="gazebo2rviz" type="gazebo2tf_node.py" output="screen"/>
+        <node name="record_grasp_data_node" pkg="grasp_pipeline" 
+            type="record_sim_data_server.py" output="screen" unless="$(arg active_learning)">
+            <param name="data_recording_path" value="$(arg sim_data_path)" type="string"/>
+        </node>
+        <node name="record_grasp_data_node" pkg="grasp_pipeline" 
+            type="record_active_data_server.py" output="screen" if="$(arg active_learning)">
+            <param name="data_recording_path" value="$(arg sim_data_path)" type="string"/>
+        </node>
+        <node name="control_sim_allegro_server_node" pkg="grasp_pipeline" 
+            type="control_sim_allegro_server.py" output="screen" />
+        <node name="grasp_control_server_node" pkg="grasp_control" 
+            type="grasp_control_server.py" output="screen" />
+    </group>
+
 </launch>
